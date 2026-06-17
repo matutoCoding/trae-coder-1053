@@ -66,9 +66,14 @@ echarts.use([
   CanvasRenderer
 ])
 
-const TODAY = '2026-06-18'
 const DISTRICTS = ['全部', '城东区', '城西区', '城南区', '城北区', '高新区', '经开区']
 const QUALITY_FLAGS = ['全部', '合格', '待复核', '缺失补全', '异常']
+
+function subtractDays(dateStr: string, days: number): string {
+  const d = new Date(dateStr)
+  d.setDate(d.getDate() - days)
+  return formatDate(d)
+}
 
 function formatDate(d: Date): string {
   const y = d.getFullYear()
@@ -84,14 +89,29 @@ function addMonths(dateStr: string, months: number): string {
 }
 
 export default function WaterLevelData() {
+  const DATA_LATEST_DATE = useMemo(() => {
+    const sorted = [...waterLevelRecords].sort((a, b) => b.collectionTime.localeCompare(a.collectionTime))
+    return sorted[0]?.collectionTime.slice(0, 10) ?? '2026-06-18'
+  }, [])
+
+  const EFFECTIVE_TODAY = useMemo(() => {
+    const sorted = [...waterLevelRecords].sort((a, b) => b.collectionTime.localeCompare(a.collectionTime))
+    return sorted[0]?.collectionTime.slice(0, 10) ?? '2026-06-18'
+  }, [])
+
   const [districtFilter, setDistrictFilter] = useState('全部')
   const [wellFilter, setWellFilter] = useState('全部')
   const [statusFilter, setStatusFilter] = useState('全部')
-  const [startDate, setStartDate] = useState('2026-06-10')
-  const [endDate, setEndDate] = useState('2026-06-18')
+  const [startDate, setStartDate] = useState(subtractDays('2026-06-17', 8))
+  const [endDate, setEndDate] = useState('2026-06-17')
   const [searchKeyword, setSearchKeyword] = useState('')
   const [tablePage, setTablePage] = useState(1)
   const PAGE_SIZE = 20
+
+  useEffect(() => {
+    setStartDate(subtractDays(DATA_LATEST_DATE, 8))
+    setEndDate(DATA_LATEST_DATE)
+  }, [DATA_LATEST_DATE])
 
   const wellMap = useMemo(() => {
     const m: Record<string, typeof monitoringWells[0]> = {}
@@ -100,8 +120,16 @@ export default function WaterLevelData() {
   }, [])
 
   const todayRecords = useMemo(() => {
-    return waterLevelRecords.filter(r => r.collectionTime.startsWith(TODAY))
-  }, [])
+    let records = waterLevelRecords.filter(r => r.collectionTime.startsWith(EFFECTIVE_TODAY))
+    if (records.length === 0) {
+      const sorted = [...waterLevelRecords].sort((a, b) => b.collectionTime.localeCompare(a.collectionTime))
+      const fallbackDate = sorted[0]?.collectionTime.slice(0, 10)
+      if (fallbackDate) {
+        records = waterLevelRecords.filter(r => r.collectionTime.startsWith(fallbackDate))
+      }
+    }
+    return records
+  }, [EFFECTIVE_TODAY])
 
   const stats = useMemo(() => {
     const todayCount = todayRecords.length
@@ -174,7 +202,8 @@ export default function WaterLevelData() {
   }, [districtFilter])
 
   const gaugeOption = useMemo(() => {
-    const currentDepth = todayRecords.length > 0 ? todayRecords[todayRecords.length - 1].waterDepth : 25
+    const sortedTodayRecords = [...todayRecords].sort((a, b) => a.collectionTime.localeCompare(b.collectionTime))
+    const currentDepth = sortedTodayRecords.length > 0 ? sortedTodayRecords[sortedTodayRecords.length - 1].waterDepth : 25
     return {
       series: [{
         type: 'gauge',

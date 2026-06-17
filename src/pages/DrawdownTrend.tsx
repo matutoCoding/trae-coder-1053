@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { Activity, Droplets, AlertTriangle, TrendingUp, TrendingDown, ChevronDown, Calendar, BarChart3, Layers, AlertCircle, Info, ArrowDown, ArrowUp } from 'lucide-react'
 import ReactECharts from 'echarts-for-react'
 import * as echarts from 'echarts/core'
@@ -76,6 +76,12 @@ export default function DrawdownTrend() {
     monitoringWells.slice(0, 5).map(w => w.wellId)
   )
 
+  useEffect(() => {
+    if (selectedWellId !== 'all') {
+      setSelectedCompareWells([selectedWellId])
+    }
+  }, [selectedWellId])
+
   const allRecordsByDate = useMemo(() => {
     const map = new Map<string, { wellDepths: Map<string, number[]> }>()
     waterLevelRecords.forEach(record => {
@@ -121,10 +127,28 @@ export default function DrawdownTrend() {
     return result
   }, [sortedDates, allRecordsByDate])
 
+  const currentDailyAvg = useMemo(() => {
+    if (selectedWellId === 'all') {
+      return cityDailyAvg
+    }
+    const result: Array<{ date: string; avgDepth: number }> = []
+    sortedDates.forEach(date => {
+      const dayData = allRecordsByDate.get(date)
+      if (dayData) {
+        const depths = dayData.wellDepths.get(selectedWellId)
+        if (depths && depths.length > 0) {
+          const sum = depths.reduce((s, d) => s + d, 0)
+          result.push({ date, avgDepth: sum / depths.length })
+        }
+      }
+    })
+    return result
+  }, [selectedWellId, cityDailyAvg, sortedDates, allRecordsByDate])
+
   const last365DaysAvg = useMemo(() => {
-    const startIdx = Math.max(0, cityDailyAvg.length - 365)
-    return cityDailyAvg.slice(startIdx)
-  }, [cityDailyAvg])
+    const startIdx = Math.max(0, currentDailyAvg.length - 365)
+    return currentDailyAvg.slice(startIdx)
+  }, [currentDailyAvg])
 
   const getLast30DaysMean = (data: typeof cityDailyAvg) => {
     const last30 = data.slice(-30)
@@ -148,12 +172,12 @@ export default function DrawdownTrend() {
     return found?.avgDepth ?? null
   }
 
-  const last30Mean = useMemo(() => getLast30DaysMean(cityDailyAvg), [cityDailyAvg])
-  const prev30Mean = useMemo(() => getPrev30DaysMean(cityDailyAvg), [cityDailyAvg])
+  const last30Mean = useMemo(() => getLast30DaysMean(currentDailyAvg), [currentDailyAvg])
+  const prev30Mean = useMemo(() => getPrev30DaysMean(currentDailyAvg), [currentDailyAvg])
   const monthChange = useMemo(() => last30Mean - prev30Mean, [last30Mean, prev30Mean])
   const monthChangePercent = useMemo(() => prev30Mean !== 0 ? (monthChange / prev30Mean) * 100 : 0, [monthChange, prev30Mean])
 
-  const sameDayLastYearValue = useMemo(() => getSameDayLastYear(cityDailyAvg, latestDate), [cityDailyAvg, latestDate])
+  const sameDayLastYearValue = useMemo(() => getSameDayLastYear(currentDailyAvg, latestDate), [currentDailyAvg, latestDate])
   const yearChange = useMemo(() => sameDayLastYearValue !== null ? last30Mean - sameDayLastYearValue : 0, [last30Mean, sameDayLastYearValue])
   const yearChangePercent = useMemo(() => sameDayLastYearValue !== null && sameDayLastYearValue !== 0 ? (yearChange / sameDayLastYearValue) * 100 : 0, [yearChange, sameDayLastYearValue])
 
@@ -174,6 +198,13 @@ export default function DrawdownTrend() {
   }, [])
 
   const maxDrawdownWell = useMemo(() => {
+    if (selectedWellId !== 'all') {
+      const info = wellLatestDepth.get(selectedWellId)
+      if (info) {
+        return { wellName: info.well.wellName, depth: info.depth, wellId: selectedWellId }
+      }
+      return null
+    }
     let maxWell: { wellName: string; depth: number; wellId: string } | null = null
     wellLatestDepth.forEach((info, wellId) => {
       if (!maxWell || info.depth > maxWell.depth) {
@@ -181,9 +212,21 @@ export default function DrawdownTrend() {
       }
     })
     return maxWell
-  }, [wellLatestDepth])
+  }, [selectedWellId, wellLatestDepth])
 
   const recoveryWellCount = useMemo(() => {
+    if (selectedWellId !== 'all') {
+      const wellRecords = waterLevelRecords
+        .filter(r => r.wellId === selectedWellId)
+        .sort((a, b) => a.collectionTime.localeCompare(b.collectionTime))
+      if (wellRecords.length >= 30) {
+        const last30 = wellRecords.slice(-30)
+        const firstHalf = last30.slice(0, 15).reduce((s, r) => s + r.waterDepth, 0) / 15
+        const secondHalf = last30.slice(15).reduce((s, r) => s + r.waterDepth, 0) / 15
+        if (secondHalf < firstHalf) return 1
+      }
+      return 0
+    }
     let count = 0
     wellLatestDepth.forEach((_, wellId) => {
       const wellRecords = waterLevelRecords
@@ -197,7 +240,7 @@ export default function DrawdownTrend() {
       }
     })
     return count
-  }, [wellLatestDepth])
+  }, [selectedWellId, wellLatestDepth])
 
   const aggregateByGranularity = useMemo(() => {
     return (data: typeof last365DaysAvg, gran: TimeGranularity) => {
@@ -569,7 +612,7 @@ export default function DrawdownTrend() {
     const monthlyByYear: Record<string, Map<string, number[]>> = {}
     years.forEach(y => { monthlyByYear[y] = new Map() })
 
-    cityDailyAvg.forEach(item => {
+    currentDailyAvg.forEach(item => {
       const date = parseDate(item.date)
       const year = String(date.getFullYear())
       if (!years.includes(year)) return
@@ -612,7 +655,7 @@ export default function DrawdownTrend() {
       wetAvg: parseFloat(wetAvg.toFixed(2)),
       diff: parseFloat(diff.toFixed(2))
     }
-  }, [cityDailyAvg])
+  }, [currentDailyAvg])
 
   const seasonalChartOption = useMemo(() => {
     const colors = ['#3B82F6', '#10B981', '#F59E0B']
@@ -734,7 +777,7 @@ export default function DrawdownTrend() {
   const yearlyTrendData = useMemo(() => {
     const yearly: Record<number, number[]> = {}
 
-    cityDailyAvg.forEach(item => {
+    currentDailyAvg.forEach(item => {
       const year = parseDate(item.date).getFullYear()
       if (!yearly[year]) yearly[year] = []
       yearly[year].push(item.avgDepth)
@@ -801,7 +844,7 @@ export default function DrawdownTrend() {
       willBreak,
       breakYear
     }
-  }, [cityDailyAvg])
+  }, [currentDailyAvg])
 
   const yearlyTrendOption = useMemo(() => {
     const allYears = [...yearlyTrendData.actualYears, ...yearlyTrendData.predictYears]
@@ -934,7 +977,7 @@ export default function DrawdownTrend() {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-5 mb-6">
         <StatCard
-          title="全市平均埋深"
+          title={selectedWellId === 'all' ? '全市平均埋深' : (maxDrawdownWell ? `${maxDrawdownWell.wellName}埋深` : '当前井埋深')}
           value={last30Mean.toFixed(2)}
           unit="m"
           icon={Droplets}
@@ -960,7 +1003,7 @@ export default function DrawdownTrend() {
         />
 
         <StatCard
-          title="最大降深井点"
+          title={selectedWellId === 'all' ? '最大降深井点' : (maxDrawdownWell ? `${maxDrawdownWell.wellName}当前埋深` : '当前井埋深')}
           value={maxDrawdownWell ? maxDrawdownWell.depth.toFixed(2) : '--'}
           unit="m"
           icon={AlertTriangle}
@@ -968,9 +1011,9 @@ export default function DrawdownTrend() {
         />
 
         <StatCard
-          title="水位恢复井点"
+          title={selectedWellId === 'all' ? '水位恢复井点' : '水位恢复状态'}
           value={recoveryWellCount}
-          unit="口"
+          unit={selectedWellId === 'all' ? '口' : recoveryWellCount === 1 ? '（恢复中）' : '（未恢复）'}
           icon={TrendingDown}
           color="success"
         />
@@ -981,11 +1024,24 @@ export default function DrawdownTrend() {
           <AlertCircle className="w-5 h-5 text-warning shrink-0 mt-0.5" />
           <div className="flex-1">
             <p className="text-sm text-gray-700">
-              <span className="font-semibold text-warning">最大降深井点：</span>
-              <span className="font-medium">{maxDrawdownWell.wellName}</span>
-              <span className="mx-2 text-gray-400">|</span>
-              当前埋深 <span className="font-mono font-semibold text-danger">{maxDrawdownWell.depth.toFixed(2)} m</span>
-              ，已接近黄色预警阈值 30m，建议重点关注。
+              {selectedWellId === 'all' ? (
+                <>
+                  <span className="font-semibold text-warning">最大降深井点：</span>
+                  <span className="font-medium">{maxDrawdownWell.wellName}</span>
+                  <span className="mx-2 text-gray-400">|</span>
+                  当前埋深 <span className="font-mono font-semibold text-danger">{maxDrawdownWell.depth.toFixed(2)} m</span>
+                  ，已接近黄色预警阈值 30m，建议重点关注。
+                </>
+              ) : (
+                <>
+                  <span className="font-semibold text-warning">当前井点：</span>
+                  <span className="font-medium">{maxDrawdownWell.wellName}</span>
+                  <span className="mx-2 text-gray-400">|</span>
+                  当前埋深 <span className="font-mono font-semibold text-danger">{maxDrawdownWell.depth.toFixed(2)} m</span>
+                  {maxDrawdownWell.depth >= 30 && '，已接近或超过黄色预警阈值 30m，建议重点关注。'}
+                  {maxDrawdownWell.depth < 30 && '，处于正常范围。'}
+                </>
+              )}
             </p>
           </div>
         </div>
@@ -998,7 +1054,11 @@ export default function DrawdownTrend() {
               <Layers className="w-5 h-5 text-secondary" />
               地下水位埋深趋势
             </h2>
-            <p className="text-sm text-gray-500 mt-1">近365天全市监测井点平均水位变化趋势</p>
+            <p className="text-sm text-gray-500 mt-1">
+              {selectedWellId === 'all'
+                ? '近365天全市监测井点平均水位变化趋势'
+                : (maxDrawdownWell ? `近365天[${maxDrawdownWell.wellName}]水位变化趋势` : '近365天水位变化趋势')}
+            </p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
             <div className="flex items-center gap-2">
@@ -1048,40 +1108,50 @@ export default function DrawdownTrend() {
             <div>
               <h2 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
                 <Activity className="w-5 h-5 text-secondary" />
-                多井点降深对比
+                {selectedWellId !== 'all' && maxDrawdownWell
+                  ? `单井[${maxDrawdownWell.wellName}]详细数据`
+                  : '多井点降深对比'}
               </h2>
-              <p className="text-sm text-gray-500 mt-1">近90天典型监测井点水位变化对比（支持多井切换）</p>
+              <p className="text-sm text-gray-500 mt-1">
+                {selectedWellId !== 'all'
+                  ? '单井近90天水位变化详细数据'
+                  : '近90天典型监测井点水位变化对比（支持多井切换）'}
+              </p>
             </div>
-            <div className="text-xs text-gray-500 flex items-center gap-1">
-              <Info className="w-3.5 h-3.5" />
-              点击标签选择/取消井点（最多8口）
+            {selectedWellId === 'all' && (
+              <div className="text-xs text-gray-500 flex items-center gap-1">
+                <Info className="w-3.5 h-3.5" />
+                点击标签选择/取消井点（最多8口）
+              </div>
+            )}
+          </div>
+          {selectedWellId === 'all' && (
+            <div className="flex flex-wrap gap-2">
+              {monitoringWells.slice(0, 12).map((well, idx) => {
+                const selected = selectedCompareWells.includes(well.wellId)
+                const color = WELL_COLORS[idx % WELL_COLORS.length]
+                return (
+                  <button
+                    key={well.wellId}
+                    onClick={() => toggleCompareWell(well.wellId)}
+                    className={cn(
+                      'px-3 py-1.5 text-xs font-medium rounded-lg border transition-all duration-200 flex items-center gap-1.5',
+                      selected
+                        ? 'text-white shadow-sm'
+                        : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100'
+                    )}
+                    style={selected ? { backgroundColor: color, borderColor: color } : {}}
+                  >
+                    <span
+                      className={cn('w-2 h-2 rounded-full', selected ? 'bg-white' : '')}
+                      style={!selected ? { backgroundColor: color } : {}}
+                    />
+                    {well.wellName}
+                  </button>
+                )
+              })}
             </div>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {monitoringWells.slice(0, 12).map((well, idx) => {
-              const selected = selectedCompareWells.includes(well.wellId)
-              const color = WELL_COLORS[idx % WELL_COLORS.length]
-              return (
-                <button
-                  key={well.wellId}
-                  onClick={() => toggleCompareWell(well.wellId)}
-                  className={cn(
-                    'px-3 py-1.5 text-xs font-medium rounded-lg border transition-all duration-200 flex items-center gap-1.5',
-                    selected
-                      ? 'text-white shadow-sm'
-                      : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100'
-                  )}
-                  style={selected ? { backgroundColor: color, borderColor: color } : {}}
-                >
-                  <span
-                    className={cn('w-2 h-2 rounded-full', selected ? 'bg-white' : '')}
-                    style={!selected ? { backgroundColor: color } : {}}
-                  />
-                  {well.wellName}
-                </button>
-              )
-            })}
-          </div>
+          )}
         </div>
         <div className="p-4">
           <ReactECharts

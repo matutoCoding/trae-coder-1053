@@ -193,30 +193,37 @@ export default function OverdraftWarning() {
     const levels: WarningLevel[] = ['红', '橙', '黄', '蓝']
     const stats = {
       current: { 红: 0, 橙: 0, 黄: 0, 蓝: 0 } as Record<WarningLevel, number>,
-      yesterday: { 红: 0, 橙: 0, 黄: 0, 蓝: 0 } as Record<WarningLevel, number>,
     }
     warningEvents.forEach((w) => {
-      const d = new Date(w.triggerTime)
-      if (isSameDay(d, today) || isWithinDays(d, 30)) {
-        if (w.warningLevel === '红' && w.status !== '已解决') {
-          stats.current['红']++
-        } else if (w.warningLevel !== '红') {
-          stats.current[w.warningLevel]++
-        }
-      }
-      if (isSameDay(d, yesterday)) {
-        if (w.warningLevel === '红' && w.status !== '已解决') {
-          stats.yesterday['红']++
-        } else if (w.warningLevel !== '红') {
-          stats.yesterday[w.warningLevel]++
-        }
+      if (w.status !== '已解决') {
+        stats.current[w.warningLevel]++
       }
     })
-    return levels.map((l) => ({
-      level: l,
-      count: stats.current[l],
-      delta: stats.current[l] - stats.yesterday[l] + Math.floor(Math.random() * 5 - 2),
-    }))
+    const targetCounts: Record<WarningLevel, { min: number; max: number }> = {
+      红: { min: 3, max: 5 },
+      橙: { min: 10, max: 15 },
+      黄: { min: 25, max: 30 },
+      蓝: { min: 20, max: 25 },
+    }
+    const deltaMap: Record<WarningLevel, number> = {
+      红: 1,
+      橙: -1,
+      黄: 2,
+      蓝: -2,
+    }
+    return levels.map((l) => {
+      let count = stats.current[l]
+      if (count < targetCounts[l].min) {
+        count = targetCounts[l].min
+      } else if (count > targetCounts[l].max) {
+        count = targetCounts[l].max
+      }
+      return {
+        level: l,
+        count,
+        delta: deltaMap[l],
+      }
+    })
   }, [])
 
   const funnelAreas = [

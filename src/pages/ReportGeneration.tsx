@@ -1177,6 +1177,7 @@ function HistoryQueryTab() {
       }
       if (selectedWells.length > 0 && !selectedWells.includes(r.wellId)) return false
       if (abnormalOnly && !r.isAbnormal) return false
+      if (statusFilter !== '全部' && r.qualityFlag !== statusFilter) return false
       if (searchKeyword) {
         const kw = searchKeyword.toLowerCase()
         const well = wellMap[r.wellId]
@@ -1188,7 +1189,7 @@ function HistoryQueryTab() {
     })
     records = [...records].sort((a, b) => new Date(b.collectionTime).getTime() - new Date(a.collectionTime).getTime())
     return records
-  }, [startDate, endDate, selectedDistricts, selectedWells, abnormalOnly, searchKeyword, minValue, maxValue, wellMap])
+  }, [startDate, endDate, selectedDistricts, selectedWells, abnormalOnly, statusFilter, searchKeyword, minValue, maxValue, wellMap])
 
   const summary = useMemo(() => {
     const total = filteredRecords.length
