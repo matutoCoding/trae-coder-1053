@@ -1,0 +1,89 @@
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;600;700&family=Noto+Serif+SC:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  font-family: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  background-color: #F5F7FA;
+  font-family: 'Noto Sans SC', sans-serif;
+  margin: 0;
+  min-height: 100vh;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #00B8D9 #E2E8F0;
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-track {
+  background: #E2E8F0;
+  border-radius: 4px;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #00B8D9 0%, #0A2540 100%);
+  border-radius: 4px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #00A3C4 0%, #082037 100%);
+}
+
+@layer components {
+  .card-shadow {
+    box-shadow: 0 4px 6px -1px rgba(10, 37, 64, 0.08),
+                0 2px 4px -2px rgba(10, 37, 64, 0.06),
+                0 0 0 1px rgba(10, 37, 64, 0.04);
+  }
+
+  .glow-red {
+    box-shadow: 0 0 12px rgba(255, 59, 48, 0.5),
+                0 0 24px rgba(255, 59, 48, 0.25),
+                inset 0 0 8px rgba(255, 59, 48, 0.1);
+  }
+
+  .glow-orange {
+    box-shadow: 0 0 12px rgba(255, 149, 0, 0.5),
+                0 0 24px rgba(255, 149, 0, 0.25),
+                inset 0 0 8px rgba(255, 149, 0, 0.1);
+  }
+
+  .glow-yellow {
+    box-shadow: 0 0 12px rgba(255, 204, 0, 0.5),
+                0 0 24px rgba(255, 204, 0, 0.25),
+                inset 0 0 8px rgba(255, 204, 0, 0.1);
+  }
+
+  .glow-blue {
+    box-shadow: 0 0 12px rgba(0, 184, 217, 0.5),
+                0 0 24px rgba(0, 184, 217, 0.25),
+                inset 0 0 8px rgba(0, 184, 217, 0.1);
+  }
+
+  .animate-pulse-ring::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    animation: pulse-ring 1.5s ease-out infinite;
+    background: inherit;
+    opacity: 0.4;
+  }
+}
