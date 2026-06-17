@@ -177,54 +177,64 @@ export default function OverdraftWarning() {
     return m
   }, [])
 
-  const today = new Date('2026-06-18')
-  const yesterday = new Date(today)
-  yesterday.setDate(yesterday.getDate() - 1)
-
-  const isSameDay = (d1: Date, d2: Date) =>
-    d1.getFullYear() === d2.getFullYear() && d1.getMonth() === d2.getMonth() && d1.getDate() === d2.getDate()
-
-  const isWithinDays = (d: Date, days: number) => {
-    const diff = (today.getTime() - d.getTime()) / 86400000
-    return diff >= 0 && diff < days
-  }
-
   const warningStats = useMemo(() => {
     const levels: WarningLevel[] = ['红', '橙', '黄', '蓝']
-    const stats = {
-      current: { 红: 0, 橙: 0, 黄: 0, 蓝: 0 } as Record<WarningLevel, number>,
-    }
+    const currentCounts: Record<WarningLevel, number> = { 红: 0, 橙: 0, 黄: 0, 蓝: 0 }
+    const todayNewCounts: Record<WarningLevel, number> = { 红: 0, 橙: 0, 黄: 0, 蓝: 0 }
+    const yesterdayNewCounts: Record<WarningLevel, number> = { 红: 0, 橙: 0, 黄: 0, 蓝: 0 }
+
+    const latestDateStr = [...warningEvents]
+      .sort((a, b) => b.triggerTime.localeCompare(a.triggerTime))[0]
+      ?.triggerTime.slice(0, 10)
+    const todayDate = latestDateStr || '2026-06-18'
+    const yesterdayDate = (() => {
+      const d = new Date(todayDate)
+      d.setDate(d.getDate() - 1)
+      const y = d.getFullYear()
+      const m = String(d.getMonth() + 1).padStart(2, '0')
+      const day = String(d.getDate()).padStart(2, '0')
+      return `${y}-${m}-${day}`
+    })()
+
     warningEvents.forEach((w) => {
-      if (w.status !== '已解决') {
-        stats.current[w.warningLevel]++
+      const well = wellMap.get(w.wellId)
+      const matchesCommon = (() => {
+        if (activeTab !== '全部' && w.status !== activeTab) return false
+        if (levelFilter !== '全部' && w.warningLevel !== levelFilter) return false
+        if (districtFilter !== '全部' && well?.district !== districtFilter) return false
+        if (searchQuery) {
+          const q = searchQuery.toLowerCase()
+          const wellName = well?.wellName.toLowerCase() || ''
+          const match =
+            w.warningId.toLowerCase().includes(q) ||
+            w.warningType.includes(q) ||
+            w.description.includes(q) ||
+            w.responsiblePerson.includes(q) ||
+            wellName.includes(q)
+          if (!match) return false
+        }
+        return true
+      })()
+
+      if (!matchesCommon) return
+
+      currentCounts[w.warningLevel]++
+
+      const dateStr = w.triggerTime.slice(0, 10)
+      if (dateStr === todayDate) {
+        todayNewCounts[w.warningLevel]++
+      }
+      if (dateStr === yesterdayDate) {
+        yesterdayNewCounts[w.warningLevel]++
       }
     })
-    const targetCounts: Record<WarningLevel, { min: number; max: number }> = {
-      红: { min: 3, max: 5 },
-      橙: { min: 10, max: 15 },
-      黄: { min: 25, max: 30 },
-      蓝: { min: 20, max: 25 },
-    }
-    const deltaMap: Record<WarningLevel, number> = {
-      红: 1,
-      橙: -1,
-      黄: 2,
-      蓝: -2,
-    }
-    return levels.map((l) => {
-      let count = stats.current[l]
-      if (count < targetCounts[l].min) {
-        count = targetCounts[l].min
-      } else if (count > targetCounts[l].max) {
-        count = targetCounts[l].max
-      }
-      return {
-        level: l,
-        count,
-        delta: deltaMap[l],
-      }
-    })
-  }, [])
+
+    return levels.map((level) => ({
+      level,
+      count: currentCounts[level],
+      delta: todayNewCounts[level] - yesterdayNewCounts[level],
+    }))
+  }, [activeTab, levelFilter, districtFilter, searchQuery, wellMap])
 
   const funnelAreas = [
     {
